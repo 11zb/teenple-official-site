@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iPhone 계산기 (토스페이먼츠 결제 연동)</title>
+  <!-- 토스페이먼츠 결제위젯 V2 SDK -->
+  <script src="https://js.tosspayments.com/v2/payment-widget"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background-color: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .calculator {
+      width: 340px;
+      height: 580px;
+      background-color: #000000;
+      padding: 20px 16px 24px;
+      border-radius: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      box-shadow: 0 20px 50px rgba(255, 255, 255, 0.08);
+      position: relative;
+    }
+
+    .display {
+      color: #ffffff;
+      font-size: 72px;
+      font-weight: 300;
+      text-align: right;
+      padding: 0 12px 12px;
+      word-break: break-all;
+      line-height: 1.1;
+      letter-spacing: -2px;
+      transition: font-size 0.2s ease;
+    }
+
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .btn {
+      border: none;
+      outline: none;
+      height: 64px;
+      border-radius: 50%;
+      font-size: 28px;
+      font-weight: 400;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      transition: filter 0.15s ease, background-color 0.2s ease;
+    }
+
+    .btn:active { filter: brightness(130%); }
+    .btn-light-gray { background-color: #a5a5a5; color: #000000; font-weight: 500; }
+    .btn-dark-gray { background-color: #333333; color: #ffffff; }
+    .btn-orange { background-color: #ff9f0a; color: #ffffff; font-size: 32px; }
+    .btn-orange.active { background-color: #ffffff; color: #ff9f0a; }
+    .btn-zero { grid-column: span 2; border-radius: 32px; justify-content: flex-start; padding-left: 26px; }
+
+    /* 결제 위젯 모달 레이어 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(5px);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .payment-card {
+      background: #ffffff;
+      width: 90%;
+      max-width: 440px;
+      border-radius: 20px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      max-height: 90vh;
+      overflow-y: auto;
+      color: #000;
+    }
+
+    .payment-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .payment-title {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #888;
+    }
+
+    .pay-submit-btn {
+      width: 100%;
+      padding: 16px;
+      background-color: #3182f6;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .loading-text {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="calculator">
+    <div class="display" id="display">0</div>
+    <div class="buttons">
+      <button class="btn btn-light-gray" id="btn-clear" onclick="handleClear()">AC</button>
+      <button class="btn btn-light-gray" onclick="toggleSign()">+/–</button>
+      <button class="btn btn-light-gray" onclick="handlePercent()">%</button>
+      <button class="btn btn-orange operator" onclick="setOperator('÷', this)">÷</button>
+
+      <button class="btn btn-dark-gray" onclick="appendNumber('7')">7</button>
+      <button class="btn btn-dark-gray" onclick="appendNumber('8')">8</button>
+      <button class="btn btn-dark-gray" onclick="appendNumber('9')">9</button>
+      <button class="btn btn-orange operator" onclick="setOperator('×', this)">×</button>
+
+      <button class="btn btn-dark-gray" onclick="appendNumber('4')">4</button>
+      <button class="btn btn-dark-gray" onclick="appendNumber('5')">5</button>
+      <button class="btn btn-dark-gray" onclick="appendNumber('6')">6</button>
+      <button class="btn btn-orange operator" onclick="setOperator('–', this)">–</button>
+
+      <button class="btn btn-dark-gray" onclick="appendNumber('1')">1</button>
+      <button class="btn btn-dark-gray" onclick="appendNumber('2')">2</button>
+      <button class="btn btn-dark-gray" onclick="appendNumber('3')">3</button>
+      <button class="btn btn-orange operator" onclick="setOperator('+', this)">+</button>
+
+      <button class="btn btn-dark-gray btn-zero" onclick="appendNumber('0')">0</button>
+      <button class="btn btn-dark-gray" onclick="appendDecimal()">.</button>
+      <button class="btn btn-orange" onclick="onEqualPressed()">=</button>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="payment-modal">
+    <div class="payment-card">
+      <div class="payment-header">
+        <span class="payment-title">결제 후 결과 확인 (999,000원)</span>
+        <button class="close-btn" onclick="closeModal()">&times;</button>
+      </div>
+      <div id="loading" class="loading-text">결제 위젯을 불러오는 중...</div>
+      <div id="payment-method"></div>
+      <div id="agreement"></div>
+      <button class="pay-submit-btn" id="payment-button" onclick="requestPayment()">999,000원 결제하기</button>
+    </div>
+  </div>
+
+  <script>
+    let currentInput = '0';
+    let previousInput = null;
+    let selectedOperator = null;
+    let waitingForNextInput = false;
+    let pendingCalculationResult = null;
+
+    const displayElement = document.getElementById('display');
+    const clearBtn = document.getElementById('btn-clear');
+
+    const clientKey = "test_ck_docs_O25w5n123oWwb2d8p2p83NQM1sec";
+    const customerKey = "USER_" + Math.random().toString(36).substring(2, 9);
+    let widgets = null;
+    let isWidgetLoaded = false;
+
+    window.addEventListener('load', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isSuccess = urlParams.get('paymentSuccess');
+      const savedResult = localStorage.getItem('calc_result');
+
+      if (isSuccess === 'true' && savedResult !== null) {
+        currentInput = savedResult;
+        localStorage.removeItem('calc_result');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        updateDisplay();
+      }
+    });
+
+    function updateDisplay() {
+      let formatted = currentInput;
+      if (currentInput !== 'Error') {
+        const parts = currentInput.split('.');
+        parts[0] = Number(parts[0]).toLocaleString('en-US', { maximumFractionDigits: 10 });
+        formatted = parts.join('.');
+      }
+      displayElement.textContent = formatted;
+
+      const length = formatted.length;
+      if (length > 8) displayElement.style.fontSize = '40px';
+      else if (length > 6) displayElement.style.fontSize = '54px';
+      else displayElement.style.fontSize = '72px';
+
+      clearBtn.textContent = (currentInput !== '0' || previousInput !== null) ? 'C' : 'AC';
+    }
+
+    function appendNumber(number) {
+      clearActiveOperators();
+      if (waitingForNextInput) {
+        currentInput = number;
+        waitingForNextInput = false;
+      } else {
+        if (currentInput === '0') currentInput = number;
+        else if (currentInput.replace(/[^0-9]/g, '').length < 9) currentInput += number;
+      }
+      updateDisplay();
+    }
+
+    function appendDecimal() {
+      clearActiveOperators();
+      if (waitingForNextInput) {
+        currentInput = '0.';
+        waitingForNextInput = false;
+      } else if (!currentInput.includes('.')) {
+        currentInput += '.';
+      }
+      updateDisplay();
+    }
+
+    function handleClear() {
+      currentInput = '0';
+      if (clearBtn.textContent === 'AC') {
+        previousInput = null;
+        selectedOperator = null;
+      }
+      clearActiveOperators();
+      updateDisplay();
+    }
+
+    function toggleSign() {
+      if (currentInput !== '0' && currentInput !== 'Error') {
+        currentInput = (parseFloat(currentInput) * -1).toString();
+        updateDisplay();
+      }
+    }
+
+    function handlePercent() {
+      if (currentInput !== 'Error') {
+        currentInput = (parseFloat(currentInput) / 100).toString();
+        updateDisplay();
+      }
+    }
+
+    function setOperator(op, element) {
+      if (selectedOperator && !waitingForNextInput) calculateInternal();
+      previousInput = currentInput;
+      selectedOperator = op;
+      waitingForNextInput = true;
+      clearActiveOperators();
+      element.classList.add('active');
+    }
+
+    function calculateInternal() {
+      if (!selectedOperator || previousInput === null) return currentInput;
+      const prev = parseFloat(previousInput);
+      const current = parseFloat(currentInput);
+      let result = 0;
+
+      switch (selectedOperator) {
+        case '+': result = prev + current; break;
+        case '–': result = prev - current; break;
+        case '×': result = prev * current; break;
+        case '÷': result = current === 0 ? 'Error' : prev / current; break;
+      }
+
+      selectedOperator = null;
+      previousInput = null;
+      waitingForNextInput = true;
+      return result.toString();
+    }
+
+    function onEqualPressed() {
+      if (!selectedOperator || previousInput === null) return;
+      pendingCalculationResult = calculateInternal();
+      clearActiveOperators();
+      openPaymentModal();
+    }
+
+    function clearActiveOperators() {
+      document.querySelectorAll('.operator').forEach(btn => btn.classList.remove('active'));
+    }
+
+    async function openPaymentModal() {
+      document.getElementById('payment-modal').classList.add('active');
+
+      if (!isWidgetLoaded) {
+        try {
+          if (typeof TossPayments === 'undefined') {
+            alert('토스페이먼츠 SDK 로드 실패. 인터넷 연결이나 로컬 서버(http://) 접속 상태를 확인하세요.');
+            return;
+          }
+
+          const tossPayments = TossPayments(clientKey);
+          widgets = tossPayments.widgets({ customerKey });
+
+          await widgets.setAmount({
+            currency: "KRW",
+            value: 999000,
+          });
+
+          await Promise.all([
+            widgets.renderPaymentMethods({ selector: "#payment-method" }),
+            widgets.renderAgreement({ selector: "#agreement" })
+          ]);
+
+          document.getElementById('loading').style.display = 'none';
+          isWidgetLoaded = true;
+        } catch (err) {
+          console.error("위젯 로딩 실패:", err);
+          document.getElementById('loading').textContent = '결제 위젯 로딩 실패 (개발자 콘솔 F12 확인)';
+        }
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('payment-modal').classList.remove('active');
+    }
+
+    async function requestPayment() {
+      if (!widgets) return;
+
+      localStorage.setItem('calc_result', pendingCalculationResult);
+
+      try {
+        const currentUrl = window.location.href.split('?')[0];
+        await widgets.requestPayment({
+          orderId: "ORDER_" + Math.random().toString(36).substring(2, 11),
+          orderName: "계산기 결과 열람 권한 (999,000원)",
+          successUrl: currentUrl + "?paymentSuccess=true",
+          failUrl: currentUrl + "?paymentSuccess=false",
+        });
+      } catch (error) {
+        console.error("결제 진행 실패:", error);
+      }
+    }
+  </script>
+</body>
+</html>
